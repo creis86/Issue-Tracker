@@ -1,31 +1,14 @@
-import express from "express";
-import fs from "fs";
-import { GraphQLScalarType } from "graphql";
-import { Kind } from "graphql/language/index.js";
-import { ApolloServer, UserInputError } from "apollo-server-express";
+const express = require("express");
+const fs = require("fs");
+const { GraphQLScalarType } = require("graphql");
+const { Kind } = require("graphql/language/index.js");
+const { ApolloServer, UserInputError } = require("apollo-server-express");
+const { MongoClient } = require("mongodb");
+
+const url = "mongodb+srv://casreis:creis86@cluster0.hpr0d.mongodb.net/issuetracker?retryWrites=true&w=majority";
+let db;
 
 let aboutMessage = "Issue Tracker API v1.0";
-
-const issuesDB = [
-    {
-        id: 1,
-        status: "New",
-        owner: "Ravan",
-        effort: 5,
-        created: new Date("2021/11/04"),
-        due: undefined,
-        title: "Error in console when clicking Add."
-    },
-    {
-        id: 2,
-        status: "Assigned",
-        owner: "Eddie",
-        effort: 14,
-        created: new Date("2021/10/29"),
-        due: new Date("2021/11/12"),
-        title: "Missing bottom border on panel."
-    }
-];
 
 const GraphQLDate = new GraphQLScalarType({
     name: "GraphQLDate",
@@ -60,21 +43,32 @@ const resolvers = {
     GraphQLDate
 };
 
-function issueList() {
-    return issuesDB;
+async function issueList() {
+    const issues = await db.collection("issues").find({}).toArray();
+    return issues;
 }
 
 function setAboutMessage(_, { message }) {
     return aboutMessage = message;
 }
 
-function issueAdd(_, { issue }) {
-    issueValidate(issue);
-    issue.id = issuesDB.length + 1;
-    issue.created = new Date();
-    issuesDB.push(issue);
+async function getNextSequence(name) {
+    const result = await db.collection("counters").findOneAndUpdate(
+        { _id: name },
+        { $inc: { current: 1 } },
+        { returnOriginal: false }
+    );
+    return result.value.current;
+}
 
-    return issue;
+async function issueAdd(_, { issue }) {
+    issueValidate(issue);
+    issue.id = await getNextSequence("issues");
+    issue.created = new Date();
+    const result = await db.collection("issues").insertOne(issue);
+    const savedIssue = await db.collection("issues")
+        .findOne({ _id: result.insertedId });
+    return savedIssue;
 }
 
 function issueValidate(issue) {
@@ -88,6 +82,13 @@ function issueValidate(issue) {
     if(errors.length > 0) {
         throw new UserInputError("Invalid input(s)", { errors });
     }
+}
+
+async function connectDb() {
+    const client = new MongoClient(url, { useNewUrlParser: true, useUnifiedTopology: true });
+    await client.connect();
+    console.log("Connected to MongoDB at", url);
+    db = client.db();
 }
 
 const server = new ApolloServer({
@@ -105,6 +106,13 @@ app.use(express.static("public"));
 
 server.applyMiddleware({ app, path: "/graphql" });
 
-app.listen(3000, () =>
-    console.log("App started on port 3000.")
-);
+(async () => {
+    try {
+        await connectDb();
+        app.listen(3000, () =>
+            console.log("App started on port 3000.")
+        );
+    } catch(error) {
+        console.log("ERROR:", error);
+    }
+})();
