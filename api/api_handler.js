@@ -8,6 +8,7 @@ const issue = require('./issue');
 const resolvers = {
   Query: {
     about: about.getMessage,
+    issue: issue.get,
     issueList: issue.list,
   },
   Mutation: {

@@ -16,22 +16,25 @@ type Issue {
     created: GraphQLDate!
     due: GraphQLDate
     title: String!
+    description: String
 }
 
-"Toned down Issue, used as inputs, without server generated values"
+"Toned down Issue, used as inputs, without server generated values."
 input IssueInputs {
     status: StatusType = New
     owner: String
     effort: Int
     due: GraphQLDate
     title: String!
+    description: String
 }
 
 # Top level declarations
 
 type Query {
     about: String!
-    issueList: [Issue!]!
+    issueList(status: StatusType): [Issue!]!
+    issue(id: Int!): Issue!
 }
 
 type Mutation {
